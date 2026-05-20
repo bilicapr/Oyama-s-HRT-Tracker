@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserCircle, UploadCloud, DownloadCloud, LogOut, User, BadgeCheck, Edit2, Lock, Trash2, Shield, Key } from 'lucide-react';
+import { UserCircle, LogOut, User, BadgeCheck, Edit2, Key, Trash2, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import { AvatarUpload } from '../components/AvatarUpload';
 import EditProfileModal from '../components/EditProfileModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
@@ -11,8 +11,7 @@ interface AccountProps {
     token: string | null;
     onOpenAuth: () => void;
     onLogout: () => void;
-    onCloudSave: () => void;
-    onCloudLoad: () => void;
+    syncStatus: 'idle' | 'saving' | 'loading' | 'error';
 }
 
 const Account: React.FC<AccountProps> = ({
@@ -21,12 +20,48 @@ const Account: React.FC<AccountProps> = ({
     token,
     onOpenAuth,
     onLogout,
-    onCloudSave,
-    onCloudLoad
+    syncStatus
 }) => {
     const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
     const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
     const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+
+    const syncIndicator = () => {
+        if (!user) return null;
+        let icon: React.ReactNode;
+        let label: string;
+        let color: string;
+
+        switch (syncStatus) {
+            case 'saving':
+                icon = <Loader2 size={14} className="animate-spin" />;
+                label = t('account.sync_saving') || 'Syncing...';
+                color = 'text-blue-500';
+                break;
+            case 'loading':
+                icon = <Loader2 size={14} className="animate-spin" />;
+                label = t('account.sync_loading') || 'Loading...';
+                color = 'text-blue-500';
+                break;
+            case 'error':
+                icon = <CloudOff size={14} />;
+                label = t('account.sync_error') || 'Sync error';
+                color = 'text-red-500';
+                break;
+            default:
+                icon = <Cloud size={14} />;
+                label = t('account.sync_ok') || 'Synced';
+                color = 'text-emerald-500';
+                break;
+        }
+
+        return (
+            <div className={`flex items-center gap-1.5 text-xs font-medium ${color}`}>
+                {icon}
+                <span>{label}</span>
+            </div>
+        );
+    };
 
     return (
         <div className="relative space-y-5 pt-6 pb-24">
@@ -38,6 +73,7 @@ const Account: React.FC<AccountProps> = ({
                         </div>
                         {t('account.title')}
                     </h2>
+                    {syncIndicator()}
                 </div>
             </div>
 
@@ -85,37 +121,6 @@ const Account: React.FC<AccountProps> = ({
                                     <div className="text-start">
                                         <p className="font-bold text-[var(--color-m3-on-surface)] dark:text-[var(--color-m3-dark-on-surface)] text-sm">{t('account.change_password')}</p>
                                         <p className="text-xs text-[var(--color-m3-on-surface-variant)] dark:text-[var(--color-m3-dark-on-surface-variant)]">{t('account.change_password_desc')}</p>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Data Section */}
-                        <div className="space-y-2">
-                            <h3 className="px-4 text-xs font-bold text-[var(--color-m3-on-surface-variant)] dark:text-[var(--color-m3-dark-on-surface-variant)] uppercase tracking-wider">{t('settings.group.data')}</h3>
-                            <div className="bg-[var(--color-m3-surface-container-lowest)] dark:bg-[var(--color-m3-dark-surface-container)] rounded-[var(--radius-xl)] border border-[var(--color-m3-outline-variant)] dark:border-[var(--color-m3-dark-outline-variant)] divide-y divide-[var(--color-m3-surface-container)] dark:divide-[var(--color-m3-dark-outline-variant)] overflow-hidden">
-                                <button
-                                    onClick={onCloudSave}
-                                    className="w-full flex items-center gap-3 px-6 py-4 hover:bg-[var(--color-m3-surface-container-low)] dark:hover:bg-[var(--color-m3-dark-surface-container-high)]/50 transition text-start m3-state-layer"
-                                >
-                                    <div className="p-1.5 bg-[var(--color-m3-primary-container)] dark:bg-teal-900/20 rounded-[var(--radius-sm)]">
-                                        <UploadCloud className="text-[var(--color-m3-primary)] dark:text-teal-400" size={18} />
-                                    </div>
-                                    <div className="text-start">
-                                        <p className="font-bold text-[var(--color-m3-on-surface)] dark:text-[var(--color-m3-dark-on-surface)] text-sm">{t('account.backup_cloud')}</p>
-                                        <p className="text-xs text-[var(--color-m3-on-surface-variant)] dark:text-[var(--color-m3-dark-on-surface-variant)]">{t('account.backup_cloud_desc')}</p>
-                                    </div>
-                                </button>
-                                <button
-                                    onClick={onCloudLoad}
-                                    className="w-full flex items-center gap-3 px-6 py-4 hover:bg-[var(--color-m3-surface-container-low)] dark:hover:bg-[var(--color-m3-dark-surface-container-high)]/50 transition text-start m3-state-layer"
-                                >
-                                    <div className="p-1.5 bg-[var(--color-m3-primary-container)] dark:bg-teal-900/20 rounded-[var(--radius-sm)]">
-                                        <DownloadCloud className="text-[var(--color-m3-primary)] dark:text-teal-400" size={18} />
-                                    </div>
-                                    <div className="text-start">
-                                        <p className="font-bold text-[var(--color-m3-on-surface)] dark:text-[var(--color-m3-dark-on-surface)] text-sm">{t('account.restore_cloud')}</p>
-                                        <p className="text-xs text-[var(--color-m3-on-surface-variant)] dark:text-[var(--color-m3-dark-on-surface-variant)]">{t('account.restore_cloud_desc')}</p>
                                     </div>
                                 </button>
                             </div>

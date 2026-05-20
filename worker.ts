@@ -254,14 +254,31 @@ export default {
         // Content
         if (url.pathname.startsWith('/api/content')) {
           if (request.method === 'GET') {
-            const content = await env.DB.prepare('SELECT * FROM content WHERE user_id = ? ORDER BY created_at DESC').bind(userId).all();
-            return withSecurityHeaders(new Response(JSON.stringify(content.results), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }));
+            const content = await env.DB.prepare('SELECT * FROM content WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').bind(userId).first();
+            return withSecurityHeaders(new Response(JSON.stringify(content || null), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }));
           }
+          if (request.method === 'PUT') {
+            const { data } = await request.json() as any;
+            const existing = await env.DB.prepare('SELECT id FROM content WHERE user_id = ?').bind(userId).first();
+            if (existing) {
+              await env.DB.prepare('UPDATE content SET data = ?, created_at = unixepoch() WHERE user_id = ?').bind(JSON.stringify(data), userId).run();
+            } else {
+              const id = crypto.randomUUID();
+              await env.DB.prepare('INSERT INTO content (id, user_id, data) VALUES (?, ?, ?)').bind(id, userId, JSON.stringify(data)).run();
+            }
+            return withSecurityHeaders(new Response(JSON.stringify({ message: 'Content saved' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }));
+          }
+          // Legacy POST — keep for backward compat but behaves same as PUT now
           if (request.method === 'POST') {
             const { data } = await request.json() as any;
-            const id = crypto.randomUUID();
-            await env.DB.prepare('INSERT INTO content (id, user_id, data) VALUES (?, ?, ?)').bind(id, userId, JSON.stringify(data)).run();
-            return withSecurityHeaders(new Response(JSON.stringify({ message: 'Content saved', id }), { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }));
+            const existing = await env.DB.prepare('SELECT id FROM content WHERE user_id = ?').bind(userId).first();
+            if (existing) {
+              await env.DB.prepare('UPDATE content SET data = ?, created_at = unixepoch() WHERE user_id = ?').bind(JSON.stringify(data), userId).run();
+            } else {
+              const id = crypto.randomUUID();
+              await env.DB.prepare('INSERT INTO content (id, user_id, data) VALUES (?, ?, ?)').bind(id, userId, JSON.stringify(data)).run();
+            }
+            return withSecurityHeaders(new Response(JSON.stringify({ message: 'Content saved' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }));
           }
         }
 

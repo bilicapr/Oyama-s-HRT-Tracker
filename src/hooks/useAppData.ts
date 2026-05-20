@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { DoseEvent, Route, Ester, SimulationResult, runSimulation, interpolateConcentration_E2, interpolateConcentration_CPA, LabResult, createCalibrationInterpolator, decompressData, decryptData, encryptData } from '../../logic';
 import { formatDate } from '../utils/helpers';
 import { useTranslation } from '../contexts/LanguageContext';
+import { cloudService } from '../services/cloud';
 
 export interface DoseTemplate {
     id: string;
@@ -14,7 +15,10 @@ export interface DoseTemplate {
     createdAt: number;
 }
 
-export const useAppData = (showDialog: (type: 'alert' | 'confirm', message: string, onConfirm?: () => void) => void) => {
+export const useAppData = (
+    showDialog: (type: 'alert' | 'confirm', message: string, onConfirm?: () => void) => void,
+    token: string | null
+) => {
     const { t, lang } = useTranslation();
 
     // --- State ---
@@ -37,18 +41,98 @@ export const useAppData = (showDialog: (type: 'alert' | 'confirm', message: stri
 
     const [simulation, setSimulation] = useState<SimulationResult | null>(null);
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'loading' | 'error'>('idle');
 
-    // --- Effects ---
+    // Track whether initial cloud load has completed (to avoid saving stale data back)
+    const cloudLoadedRef = useRef(false);
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Track the previous token to detect login/logout transitions
+    const prevTokenRef = useRef<string | null>(token);
+
+    // --- Persist to localStorage ---
     useEffect(() => { localStorage.setItem('hrt-events', JSON.stringify(events)); }, [events]);
     useEffect(() => { localStorage.setItem('hrt-weight', weight.toString()); }, [weight]);
     useEffect(() => { localStorage.setItem('hrt-lab-results', JSON.stringify(labResults)); }, [labResults]);
     useEffect(() => { localStorage.setItem('hrt-dose-templates', JSON.stringify(doseTemplates)); }, [doseTemplates]);
 
+    // --- Auto-load from cloud on login ---
+    useEffect(() => {
+        const wasLoggedOut = !prevTokenRef.current;
+        prevTokenRef.current = token;
+
+        if (!token) {
+            cloudLoadedRef.current = false;
+            return;
+        }
+
+        // Only load from cloud when token appears (login) or on first mount with token
+        if (wasLoggedOut || !cloudLoadedRef.current) {
+            let cancelled = false;
+            setSyncStatus('loading');
+            cloudService.load(token).then(data => {
+                if (cancelled) return;
+                cloudLoadedRef.current = true;
+                setSyncStatus('idle');
+                if (data && typeof data === 'object') {
+                    // Hydrate state from cloud
+                    if (Array.isArray(data.events)) setEvents(data.events);
+                    if (typeof data.weight === 'number' && data.weight > 0) setWeight(data.weight);
+                    if (Array.isArray(data.labResults)) setLabResults(data.labResults);
+                    if (Array.isArray(data.doseTemplates)) setDoseTemplates(data.doseTemplates);
+                }
+            }).catch(err => {
+                if (cancelled) return;
+                console.error('Cloud load failed:', err);
+                cloudLoadedRef.current = true; // Don't block saving
+                setSyncStatus('error');
+            });
+            return () => { cancelled = true; };
+        }
+    }, [token]);
+
+    // --- Auto-save to cloud with 1.5s debounce ---
+    const saveToCloud = useCallback(() => {
+        if (!token || !cloudLoadedRef.current) return;
+        setSyncStatus('saving');
+        const exportData = {
+            events,
+            weight,
+            labResults,
+            doseTemplates
+        };
+        cloudService.save(token, exportData).then(() => {
+            setSyncStatus('idle');
+        }).catch(err => {
+            console.error('Cloud save failed:', err);
+            setSyncStatus('error');
+        });
+    }, [token, events, weight, labResults, doseTemplates]);
+
+    useEffect(() => {
+        // Don't save until cloud data has been loaded first
+        if (!token || !cloudLoadedRef.current) return;
+
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+        debounceTimerRef.current = setTimeout(() => {
+            saveToCloud();
+        }, 1500);
+
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
+        };
+    }, [events, weight, labResults, doseTemplates, token, saveToCloud]);
+
+    // --- Timer ---
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
         return () => clearInterval(timer);
     }, []);
 
+    // --- Simulation ---
     useEffect(() => {
         if (events.length > 0) {
             const res = runSimulation(events, weight);
@@ -251,6 +335,7 @@ export const useAppData = (showDialog: (type: 'alert' | 'confirm', message: stri
         currentCPA,
         currentStatus,
         groupedEvents,
+        syncStatus,
         addEvent, updateEvent, deleteEvent, clearAllEvents,
         addLabResult, updateLabResult, deleteLabResult, clearLabResults,
         addTemplate, deleteTemplate,

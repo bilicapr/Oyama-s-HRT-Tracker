@@ -4,17 +4,11 @@ import { useTranslation, LanguageProvider } from './contexts/LanguageContext';
 import { useDialog, DialogProvider } from './contexts/DialogContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { APP_VERSION } from './constants';
-import { DoseEvent, LabResult, createCalibrationInterpolator, decompressData, encryptData, decryptData } from '../logic';
+import { DoseEvent, LabResult, decompressData, encryptData, decryptData } from '../logic';
 import { DoseTemplate } from './components/DoseFormModal';
 import { useAppData } from './hooks/useAppData';
 import { useAppNavigation, ViewKey } from './hooks/useAppNavigation';
 
-// Define NavItem interface to match what useAppNavigation returns
-interface NavItem {
-    id: string;
-    label: string;
-    icon: React.ElementType; // Use ElementType to accept components like Lucide icons
-}
 
 import WeightEditorModal from './components/WeightEditorModal';
 import DoseFormModal from './components/DoseFormModal';
@@ -30,7 +24,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ReloadPrompt from './components/ReloadPrompt';
 import Ripple from './components/Ripple';
 
-import { cloudService } from './services/cloud';
+
 
 // Pages
 import Home from './pages/Home';
@@ -58,17 +52,19 @@ const AppContent = () => {
         currentCPA,
         currentStatus,
         groupedEvents,
+        syncStatus,
         addEvent, updateEvent, deleteEvent, clearAllEvents,
         addLabResult, updateLabResult, deleteLabResult, clearLabResults,
         addTemplate, deleteTemplate,
         processImportedData
-    } = useAppData(showDialog);
+    } = useAppData(showDialog, token);
 
     const {
         currentView,
         transitionDirection,
         handleViewChange,
         mainScrollRef,
+        navItems,
     } = useAppNavigation(user);
 
 
@@ -256,52 +252,9 @@ const AppContent = () => {
         }
     };
 
-    const handleCloudSave = async () => {
-        if (!token) { setIsAuthModalOpen(true); return; }
-        const exportData = {
-            meta: { version: 1, exportedAt: new Date().toISOString() },
-            weight: weight,
-            events: events,
-            labResults: labResults,
-            doseTemplates: doseTemplates
-        };
-        try {
-            await cloudService.save(token, exportData);
-            showDialog('alert', 'Data saved to cloud successfully!');
-        } catch (e) {
-            showDialog('alert', 'Failed to save to cloud.');
-        }
-    };
 
-    const handleCloudLoad = async () => {
-        if (!token) { setIsAuthModalOpen(true); return; }
-        try {
-            const list = await cloudService.load(token);
-            if (!list || list.length === 0) {
-                showDialog('alert', 'No cloud backups found.');
-                return;
-            }
-            const latest = list[0];
-            const parsed = JSON.parse(latest.data);
-            showDialog('confirm', `Load backup from ${new Date(latest.created_at * 1000).toLocaleString()}? This will overwrite local data.`, () => {
-                processImportedData(parsed);
-            });
-        } catch (e) {
-            showDialog('alert', 'Failed to load from cloud.');
-        }
-    };
 
-    // Construct Nav Items again just for Sidebar prop, or reuse from hook if we exported it
-    // Actually we exported navItems from useAppNavigation
-    // But we need to pass them to sidebar. 
-    // And also reconstruct the bottom nav bar manually because it was inline in the original App.tsx
-    // Let's grab navItems logic from hook or just reconstruct here?
-    // The hook provides navItems.
 
-    const { navItems } = useAppNavigation(user); // Re-calling hook? No, I returned it. 
-    // Wait, I need to get it from the previous call.
-    // I already destructured it: const { ... } = useAppNavigation(user);
-    // Ah I missed destructuring `navItems` in line 59. Let me fix the destructuring.
 
     return (
         <div className="h-screen w-full bg-[var(--color-m3-surface)] dark:bg-[var(--color-m3-dark-surface)] flex flex-col md:flex-row font-sans text-[var(--color-m3-on-surface)] dark:text-[var(--color-m3-dark-on-surface)] select-none overflow-hidden transition-colors duration-300">
@@ -402,8 +355,7 @@ const AppContent = () => {
                             token={token}
                             onOpenAuth={() => setIsAuthModalOpen(true)}
                             onLogout={logout}
-                            onCloudSave={handleCloudSave}
-                            onCloudLoad={handleCloudLoad}
+                            syncStatus={syncStatus}
                         />
                     )}
 
