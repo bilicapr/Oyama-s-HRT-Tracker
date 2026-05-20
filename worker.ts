@@ -8,6 +8,7 @@ export interface Env {
   ADMIN_USERNAME?: string;
   ADMIN_PASSWORD?: string;
   AVATAR_BUCKET: R2Bucket;
+  TURNSTILE_SECRET_KEY?: string;
 }
 
 // Rate limiting map (in-memory, simple implementation)
@@ -109,6 +110,25 @@ function validatePassword(password: string): { valid: boolean; error?: string } 
   return { valid: true };
 }
 
+async function verifyTurnstile(token: string | undefined, secretKey: string | undefined, ip: string | null): Promise<boolean> {
+  if (!secretKey) return true; // Skip verification if no secret key configured
+  if (!token) return false;
+
+  const formData = new URLSearchParams();
+  formData.append('secret', secretKey);
+  formData.append('response', token);
+  if (ip) formData.append('remoteip', ip);
+
+  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: formData.toString()
+  });
+
+  const result = await res.json() as { success: boolean };
+  return result.success;
+}
+
 let cachedJWTSecret: string | null = null;
 function getValidatedJWTSecret(env: Env): string {
   if (cachedJWTSecret === null) cachedJWTSecret = validateJWTSecret(env.JWT_SECRET);
@@ -163,8 +183,13 @@ export default {
       // Register
       if (url.pathname === '/api/register' && request.method === 'POST') {
         const body = await request.json() as any;
-        let { username, password } = body;
+        let { username, password, turnstileToken } = body;
         if (!username || !password) return withSecurityHeaders(new Response('Missing credentials', { status: 400, headers: corsHeaders }));
+
+        // Verify Turnstile
+        const clientIP = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For')?.split(',')[0].trim() || null;
+        const turnstileValid = await verifyTurnstile(turnstileToken, env.TURNSTILE_SECRET_KEY, clientIP);
+        if (!turnstileValid) return withSecurityHeaders(new Response('Captcha verification failed', { status: 403, headers: corsHeaders }));
 
         username = username.trim();
         if (!validateUsername(username)) return withSecurityHeaders(new Response('Invalid username format', { status: 400, headers: corsHeaders }));
@@ -184,9 +209,14 @@ export default {
       // Login
       if (url.pathname === '/api/login' && request.method === 'POST') {
         const body = await request.json() as any;
-        let { username, password } = body;
+        let { username, password, turnstileToken } = body;
         if (!username || !password) return withSecurityHeaders(new Response('Missing credentials', { status: 400, headers: corsHeaders }));
         username = username.trim();
+
+        // Verify Turnstile
+        const clientIP = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For')?.split(',')[0].trim() || null;
+        const turnstileValid = await verifyTurnstile(turnstileToken, env.TURNSTILE_SECRET_KEY, clientIP);
+        if (!turnstileValid) return withSecurityHeaders(new Response('Captcha verification failed', { status: 403, headers: corsHeaders }));
 
         // Admin login check
         // Guard against undefined/empty env vars allowing "null" or "undefined" login

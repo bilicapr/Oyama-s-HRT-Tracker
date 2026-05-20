@@ -4,8 +4,8 @@ import { authService, User } from '../services/auth';
 interface AuthContextType {
     user: User | null;
     token: string | null;
-    login: (username: string, password: string) => Promise<void>;
-    register: (username: string, password: string) => Promise<void>;
+    login: (username: string, password: string, turnstileToken?: string) => Promise<void>;
+    register: (username: string, password: string, turnstileToken?: string) => Promise<void>;
     logout: () => void;
     isLoading: boolean;
     updateProfile: (username: string) => Promise<void>;
@@ -39,20 +39,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
     }, [token]);
 
-    const login = async (username: string, password: string) => {
-        const data = await authService.login(username, password);
+    const login = async (username: string, password: string, turnstileToken?: string) => {
+        const data = await authService.login(username, password, turnstileToken);
         setToken(data.token);
         setUser(data.user);
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('auth_user', JSON.stringify(data.user));
     };
 
-    const register = async (username: string, password: string) => {
+    const register = async (username: string, password: string, turnstileToken?: string) => {
         // Step 1: Register the user
-        await authService.register(username, password);
+        await authService.register(username, password, turnstileToken);
 
         // Step 2: Automatically login the user after successful registration
-        const data = await authService.login(username, password);
+        const data = await authService.login(username, password, turnstileToken);
         setToken(data.token);
         setUser(data.user);
         localStorage.setItem('auth_token', data.token);
