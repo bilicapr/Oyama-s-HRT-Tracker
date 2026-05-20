@@ -26,7 +26,7 @@ const Admin: React.FC<AdminProps> = ({ t }) => {
             const data = await adminService.getUsers(token);
             setUsers(data);
         } catch (err) {
-            setError('Failed to load users');
+            setError(t('admin.load_failed'));
         } finally {
             setLoading(false);
         }
@@ -39,22 +39,23 @@ const Admin: React.FC<AdminProps> = ({ t }) => {
     const handleDeleteUser = async (user: AdminUser) => {
         if (!token) return;
 
-        showDialog('confirm', `Are you sure you want to delete user "${user.username}"? This action cannot be undone.`, async () => {
+        showDialog('confirm', t('admin.delete_confirm').replace('{username}', user.username), async () => {
             try {
                 await adminService.deleteUser(token, user.id);
-                // Optimistic update
                 setUsers(prev => prev.filter(u => u.id !== user.id));
-                showDialog('alert', 'User deleted successfully.');
+                showDialog('alert', t('admin.delete_success'));
             } catch (err) {
-                showDialog('alert', 'Failed to delete user.');
+                showDialog('alert', t('admin.delete_failed'));
             }
         });
     };
 
+    const envLabel = window.location.hostname === 'localhost' ? 'Local' : 'Remote';
+
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-zinc-950/50 pt-8 pb-20 px-6 md:px-12 w-full">
             {/* Header */}
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight mb-12">Dashboard</h1>
+            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight mb-12">{t('admin.dashboard')}</h1>
 
             {/* Tabs */}
             <div className="flex items-center gap-8 border-b border-zinc-200 dark:border-zinc-800 mb-12">
@@ -65,7 +66,7 @@ const Admin: React.FC<AdminProps> = ({ t }) => {
                         : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
                         }`}
                 >
-                    Users
+                    {t('admin.users')}
                     {activeTab === 'users' && (
                         <span className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-zinc-900 dark:bg-zinc-50 rounded-full" />
                     )}
@@ -77,7 +78,7 @@ const Admin: React.FC<AdminProps> = ({ t }) => {
                         : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
                         }`}
                 >
-                    System
+                    {t('admin.system')}
                     {activeTab === 'system' && (
                         <span className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-zinc-900 dark:bg-zinc-50 rounded-full" />
                     )}
@@ -89,16 +90,16 @@ const Admin: React.FC<AdminProps> = ({ t }) => {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Manage Users</h2>
+                            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{t('admin.manage_users')}</h2>
                             <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-semibold px-2.5 py-0.5 rounded-full">
-                                {users.length} items
+                                {users.length} {t('admin.items')}
                             </span>
                         </div>
                         <div className="flex gap-2">
                             <button
                                 onClick={fetchUsers}
                                 className="p-2 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white dark:hover:bg-zinc-800/50 transition-all"
-                                title="Refresh List"
+                                title={t('admin.refresh')}
                             >
                                 <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                             </button>
@@ -146,7 +147,7 @@ const Admin: React.FC<AdminProps> = ({ t }) => {
                                         <button
                                             onClick={() => handleDeleteUser(u)}
                                             className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border border-transparent hover:border-red-100 dark:hover:border-red-900/30 rounded-lg transition-all"
-                                            title="Delete User"
+                                            title={t('admin.delete_confirm').split('?')[0]}
                                         >
                                             <Trash2 size={16} />
                                         </button>
@@ -161,7 +162,7 @@ const Admin: React.FC<AdminProps> = ({ t }) => {
             {activeTab === 'system' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">System Status</h2>
+                        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{t('admin.system_status')}</h2>
                     </div>
 
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -170,13 +171,9 @@ const Admin: React.FC<AdminProps> = ({ t }) => {
                                 <Server size={24} />
                             </div>
                             <div>
-                                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Operational</h3>
+                                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">{t('admin.operational')}</h3>
                                 <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-md">
-                                    All systems are running smoothly. The backend is connected to the
-                                    <span className="font-mono text-xs mx-1 px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-700 dark:text-zinc-300">
-                                        {window.location.hostname === 'localhost' ? 'Local' : 'Remote'}
-                                    </span>
-                                    environment.
+                                    {t('admin.status_desc').replace('{env}', envLabel)}
                                 </p>
                             </div>
                         </div>
