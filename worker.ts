@@ -226,7 +226,7 @@ export default {
         if (adminU && adminP && adminU.length > 0 && adminP.length > 0 &&
           timingSafeEqual(username, adminU) && timingSafeEqual(password, adminP)) {
           const secret = new TextEncoder().encode(jwtSecret);
-          const token = await new SignJWT({ sub: 'admin', username: 'Admin', role: 'admin' }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('1d').sign(secret);
+          const token = await new SignJWT({ sub: 'admin', username: 'Admin', role: 'admin' }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().sign(secret);
           await env.DB.prepare("INSERT OR IGNORE INTO users (id, username, password_hash) VALUES ('admin', 'Admin', 'env_managed')").run();
           return withSecurityHeaders(new Response(JSON.stringify({ token, user: { id: 'admin', username: 'Admin', isAdmin: true } }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }));
         }
@@ -244,7 +244,7 @@ export default {
         }
 
         const secret = new TextEncoder().encode(jwtSecret);
-        const token = await new SignJWT({ sub: user.id, username: user.username, role: 'user' }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('7d').sign(secret);
+        const token = await new SignJWT({ sub: user.id, username: user.username, role: 'user' }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().sign(secret);
         return withSecurityHeaders(new Response(JSON.stringify({ token, user: { id: user.id, username: user.username, isAdmin: false } }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }));
       }
 
